@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactPlayer from "react-player";
 import { useSocket } from "../../provider/Socket";
 import phone from '../../assets/phone.png'
+import endCall from '../../assets/phone-disconnect.png'
 import { usePeer } from "../../provider/Peer";
 
 interface IProps {
@@ -14,7 +15,7 @@ function HomePage() {
   const [name, setName] = useState<string>('');
   const [users, setUsers] = useState<IProps[]>([]);
   const { socket } = useSocket()
-  const { localStream, setLocalStream, peer, remoteStream } = usePeer()
+  const { localStream, setLocalStream, peer, remoteStream, callEnded, caller } = usePeer()
   const ref = useRef<HTMLInputElement>(null);
   const handleSubmit = () => {
     if (ref.current) {
@@ -41,10 +42,14 @@ function HomePage() {
     }
   })
 
+  const handleEndCall = useCallback(() => {
+    socket.emit('call-ended', { from: caller.from, to: caller.to })
+  }, [socket, caller])
+
   useEffect(() => {
     const startMyVideo = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         setLocalStream(stream)
       } catch (error) {
         console.log(error)
@@ -78,9 +83,22 @@ function HomePage() {
             <button onClick={handleSubmit} type="button" className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800 cursor-pointer">Join Server</button>
           </div>
           <div className="flex gap-4">
-            {localStream !== null && <ReactPlayer url={localStream} playing />}
-            {remoteStream !== null && <ReactPlayer url={remoteStream} playing />}
+            {
+              localStream !== null &&
+              <div className="relative">
+                <ReactPlayer url={localStream} playing />
+                <span className="absolute left-22 top-2 bg-white px-2 py-1 font-bold text-sm rounded-lg">{caller.from || name || "You"}</span>
+              </div>
+            }
+            {
+              remoteStream !== null &&
+              <div className="relative">
+                <ReactPlayer url={remoteStream} playing />
+                <span className="absolute left-22 top-2 bg-white px-2 py-1 font-bold text-sm rounded-lg">{caller.to || ''}</span>
+              </div>
+            }
           </div>
+          {callEnded && <img onClick={handleEndCall} src={endCall} alt="end-call" className="bg-white p-2 rounded-full cursor-pointer" />}
         </div>
       </div>
     </>

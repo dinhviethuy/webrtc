@@ -36,9 +36,34 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("end-call", ({ from, to }) => {
+    const toUser = users.find((user) => user.username === to);
+    if (toUser) {
+      io.to(toUser.id).emit("end-call", { from, to });
+    }
+  });
+  socket.on("call-ended", ({ from, to }) => {
+    const fromUser = users.find((user) => user.username === from);
+    const toUser = users.find((user) => user.username === to);
+    console.log("Call ended: ", from, to);
+    if (toUser) {
+      io.to(toUser.id).emit("call-ended", { from, to });
+    }
+    if (fromUser) {
+      io.to(fromUser.id).emit("call-ended", { from, to });
+    }
+  });
   socket.on("icecandidate", (candidate) => {
     // console.log({ candidate });
     socket.broadcast.emit("icecandidate", candidate);
+  });
+  socket.on("disconnect", () => {
+    console.log("Disconnected id: ", socket.id);
+    const user = users.find((user) => user.id === socket.id);
+    if (user) {
+      users.splice(users.indexOf(user), 1);
+      io.emit("joined", users);
+    }
   });
 });
 
