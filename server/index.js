@@ -53,6 +53,22 @@ io.on("connection", (socket) => {
       io.to(fromUser.id).emit("call-ended", { from, to });
     }
   });
+
+  socket.on("camera", ({ from, to }) => {
+    console.log("Camera ", from, to);
+    const fromUser = users.find((user) => user.username === from);
+    if (fromUser) {
+      io.to(fromUser.id).emit("camera", { from, to });
+    }
+  });
+
+  socket.on("audio", ({ from, to }) => {
+    const fromUser = users.find((user) => user.username === from);
+    if (fromUser) {
+      io.to(fromUser.id).emit("audio", { from, to });
+    }
+  });
+
   socket.on("icecandidate", (candidate) => {
     // console.log({ candidate });
     socket.broadcast.emit("icecandidate", candidate);

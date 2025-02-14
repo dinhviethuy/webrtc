@@ -1,11 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useState } from "react"
 import { useSocket } from "./Socket";
 
 interface PeerContextType {
   peer: RTCPeerConnection,
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
-  setLocalStream: (stream: MediaStream) => void;
+  setLocalStream: (stream: MediaStream | null) => void;
   callEnded: boolean;
   setCallEnded: (value: boolean) => void;
   caller: ICaller;
@@ -45,15 +45,26 @@ export const usePeer = () => {
   return useContext(PeerContext)
 }
 
-export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
-  const { socket } = useSocket()
-  const peer = useMemo(() => new RTCPeerConnection({
+const createPeer = () => {
+  return new RTCPeerConnection({
     iceServers: [
       {
         urls: 'stun:stun.l.google.com:19302',
       }
     ]
-  }), [])
+  })
+}
+
+export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
+  const { socket } = useSocket()
+  // const peer = useMemo(() => new RTCPeerConnection({
+  //   iceServers: [
+  //     {
+  //       urls: 'stun:stun.l.google.com:19302',
+  //     }
+  //   ]
+  // }), [])
+  const [peer, setPeer] = useState<RTCPeerConnection>(createPeer)
   const [localStream, setLocalStream] = useState<null | MediaStream>(null)
   const [remoteStream, setRemoteStream] = useState<null | MediaStream>(null)
   const [callEnded, setCallEnded] = useState<boolean>(false)
@@ -71,8 +82,8 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   const createAnswer = useCallback(async (data: IPropsAnswer) => {
     const { answer, from, to } = data
     await peer.setRemoteDescription(answer)
+    setCaller({ to, from })
     setCallEnded(true)
-    setCaller({ from, to })
     socket.emit('end-call', { from, to })
   }, [peer, socket])
 
@@ -90,7 +101,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   const handleEndCall = useCallback((data: { from: string, to: string }) => {
     console.log({ data })
     setCallEnded(true)
-    setCaller({ from: data.from, to: data.to })
+    setCaller({ from: data.to, to: data.from })
   }, [setCallEnded, setCaller,])
 
   const handleCallEnded = useCallback((data: { from: string, to: string }) => {
@@ -99,20 +110,35 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     setCaller({ from: '', to: '' })
     setRemoteStream(null)
     peer.close()
+    setPeer(createPeer)
   }, [setCallEnded, setCaller, setRemoteStream, peer])
+
+  const handleCamera = useCallback(() => {
+    localStream?.getVideoTracks().forEach(track => {
+      track.enabled = !track.enabled
+    })
+  }, [localStream])
+
+  const handleAudio = useCallback(() => {
+    console.log('audio')
+    localStream?.getAudioTracks().forEach(track => {
+      track.enabled = !track.enabled
+    })
+  }, [localStream])
 
   useEffect(() => {
     if (localStream && localStream.getTracks().length > 0) {
       localStream.getTracks().forEach(track => {
         peer.addTrack(track, localStream)
       })
-      peer.ontrack = (e) => {
-        setRemoteStream(e.streams[0])
-      }
-      peer.onicecandidate = (e) => {
-        if (e.candidate) {
-          socket.emit('icecandidate', e.candidate)
-        }
+    }
+    peer.ontrack = (e) => {
+      console.log({ e: e.streams })
+      setRemoteStream(e.streams[0])
+    }
+    peer.onicecandidate = (e) => {
+      if (e.candidate) {
+        socket.emit('icecandidate', e.candidate)
       }
     }
   }, [localStream, peer, socket])
@@ -123,6 +149,8 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     socket.on('icecandidate', createIceCandidate)
     socket.on('end-call', handleEndCall)
     socket.on('call-ended', handleCallEnded)
+    socket.on('camera', handleCamera)
+    socket.on('audio', handleAudio)
     return () => {
       socket.off('offer', handleOffer)
       socket.off('answer', createAnswer)
@@ -130,7 +158,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
       socket.off('end-call', handleEndCall)
       socket.off('call-ended', handleCallEnded)
     }
-  }, [socket, peer, handleOffer, createAnswer, createIceCandidate, handleEndCall, handleCallEnded])
+  }, [socket, peer, handleOffer, createAnswer, createIceCandidate, handleEndCall, handleCallEnded, handleCamera, handleAudio])
 
   return (
     <>

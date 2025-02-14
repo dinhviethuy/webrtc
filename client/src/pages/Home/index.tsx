@@ -4,6 +4,9 @@ import { useSocket } from "../../provider/Socket";
 import phone from '../../assets/phone.png'
 import endCall from '../../assets/phone-disconnect.png'
 import { usePeer } from "../../provider/Peer";
+import { AiFillAudio, AiOutlineAudioMuted } from "react-icons/ai";
+import { FaCamera } from "react-icons/fa";
+import { RiCameraOffFill } from "react-icons/ri";
 
 interface IProps {
   id: string,
@@ -12,6 +15,8 @@ interface IProps {
 
 function HomePage() {
   const [hidden, setHidden] = useState<boolean>(false);
+  const [isCamera, setIsCamera] = useState<boolean>(true);
+  const [isAudio, setIsAudio] = useState<boolean>(true);
   const [name, setName] = useState<string>('');
   const [users, setUsers] = useState<IProps[]>([]);
   const { socket } = useSocket()
@@ -45,6 +50,16 @@ function HomePage() {
   const handleEndCall = useCallback(() => {
     socket.emit('call-ended', { from: caller.from, to: caller.to })
   }, [socket, caller])
+
+  const cam = useCallback(() => {
+    setIsCamera(!isCamera)
+    socket.emit('camera', { from: caller.from, to: caller.to })
+  }, [socket, caller, isCamera]);
+
+  const audio = useCallback(() => {
+    setIsAudio(!isAudio)
+    socket.emit('audio', { from: caller.from, to: caller.to })
+  }, [socket, caller, isAudio]);
 
   useEffect(() => {
     const startMyVideo = async () => {
@@ -86,7 +101,7 @@ function HomePage() {
             {
               localStream !== null &&
               <div className="relative">
-                <ReactPlayer url={localStream} playing />
+                <ReactPlayer url={localStream as MediaStream} playing />
                 <span className="absolute left-22 top-2 bg-white px-2 py-1 font-bold text-sm rounded-lg">{caller.from || name || "You"}</span>
               </div>
             }
@@ -98,7 +113,20 @@ function HomePage() {
               </div>
             }
           </div>
-          {callEnded && <img onClick={handleEndCall} src={endCall} alt="end-call" className="bg-white p-2 rounded-full cursor-pointer" />}
+          <div className="flex gap-2 justify-center items-center">
+            {
+              callEnded &&
+              <div className="flex gap-2">
+                <button onClick={cam} className="bg-red-500 text-white p-2 rounded-full font-bold cursor-pointer">
+                  {isCamera ? <FaCamera size={30} /> : <RiCameraOffFill size={30} />}
+                </button>
+                <button onClick={audio} className="bg-red-500 text-white p-2 rounded-full font-bold cursor-pointer">
+                  {isAudio ? <AiFillAudio size={30} /> : <AiOutlineAudioMuted size={30} />}
+                </button>
+              </div>
+            }
+            {callEnded && <img onClick={handleEndCall} src={endCall} alt="end-call" className="bg-white p-2 rounded-full cursor-pointer" />}
+          </div>
         </div>
       </div>
     </>
