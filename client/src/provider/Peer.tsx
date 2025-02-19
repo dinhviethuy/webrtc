@@ -5,7 +5,11 @@ interface PeerContextType {
   peer: RTCPeerConnection,
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  localScreen: MediaStream | null;
+  remoteScreen: MediaStream | null;
   setLocalStream: (stream: MediaStream | null) => void;
+  setLocalScreen: (stream: MediaStream | null) => void;
+  setRemoteScreen: (stream: MediaStream | null) => void;
   callEnded: boolean;
   setCallEnded: (value: boolean) => void;
   caller: ICaller;
@@ -22,6 +26,11 @@ interface IProps {
   offer: RTCSessionDescriptionInit;
 }
 
+interface IPropsScreen {
+  from: string;
+  to: string;
+}
+
 interface IPropsAnswer {
   from: string;
   to: string;
@@ -32,7 +41,11 @@ const PeerContext = createContext<PeerContextType>({
   peer: new RTCPeerConnection(),
   localStream: null,
   remoteStream: null,
+  localScreen: null,
+  remoteScreen: null,
   setLocalStream: () => { },
+  setLocalScreen: () => { },
+  setRemoteScreen: () => { },
   callEnded: false,
   setCallEnded: () => { },
   caller: {
@@ -66,7 +79,9 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   // }), [])
   const [peer, setPeer] = useState<RTCPeerConnection>(createPeer)
   const [localStream, setLocalStream] = useState<null | MediaStream>(null)
+  const [localScreen, setLocalScreen] = useState<null | MediaStream>(null)
   const [remoteStream, setRemoteStream] = useState<null | MediaStream>(null)
+  const [remoteScreen, setRemoteScreen] = useState<null | MediaStream>(null)
   const [callEnded, setCallEnded] = useState<boolean>(false)
   const [caller, setCaller] = useState<ICaller>({
     from: '',
@@ -80,6 +95,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   }, [peer, socket])
 
   const createAnswer = useCallback(async (data: IPropsAnswer) => {
+    console.log({ data })
     const { answer, from, to } = data
     await peer.setRemoteDescription(answer)
     setCaller({ to, from })
@@ -126,6 +142,12 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     })
   }, [localStream])
 
+  const handleScreenShare = useCallback(async (data: IPropsScreen) => {
+    const offer = await peer.createOffer()
+    await peer.setLocalDescription(offer)
+    socket.emit('offer', { from: data.from, to: data.to, offer: peer.localDescription })
+  }, [peer, socket])
+
   useEffect(() => {
     if (localStream && localStream.getTracks().length > 0) {
       localStream.getTracks().forEach(track => {
@@ -151,6 +173,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     socket.on('call-ended', handleCallEnded)
     socket.on('camera', handleCamera)
     socket.on('audio', handleAudio)
+    socket.on('start-share-screen', handleScreenShare)
     return () => {
       socket.off('offer', handleOffer)
       socket.off('answer', createAnswer)
@@ -158,11 +181,11 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
       socket.off('end-call', handleEndCall)
       socket.off('call-ended', handleCallEnded)
     }
-  }, [socket, peer, handleOffer, createAnswer, createIceCandidate, handleEndCall, handleCallEnded, handleCamera, handleAudio])
+  }, [socket, peer, handleOffer, createAnswer, createIceCandidate, handleEndCall, handleCallEnded, handleCamera, handleAudio, handleScreenShare])
 
   return (
     <>
-      <PeerContext.Provider value={{ peer, localStream, remoteStream, setLocalStream, callEnded, setCallEnded, caller }}>
+      <PeerContext.Provider value={{ peer, localStream, remoteStream, setLocalStream, callEnded, setCallEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen }}>
         {children}
       </PeerContext.Provider>
     </>

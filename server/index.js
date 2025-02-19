@@ -23,6 +23,7 @@ io.on("connection", (socket) => {
     io.emit("joined", users);
   });
   socket.on("offer", ({ from, to, offer }) => {
+    console.log("Offer from: ", from, " to: ", to);
     const toUser = users.find((user) => user.username === to);
     if (toUser) {
       console.log("Offer to: ", toUser.username);
@@ -30,6 +31,7 @@ io.on("connection", (socket) => {
     }
   });
   socket.on("answer", ({ from, to, answer }) => {
+    console.log("Answer from: ", from, " to: ", to);
     const fromUser = users.find((user) => user.username === from);
     if (fromUser) {
       io.to(fromUser.id).emit("answer", { from, to, answer });
@@ -66,6 +68,13 @@ io.on("connection", (socket) => {
     const fromUser = users.find((user) => user.username === from);
     if (fromUser) {
       io.to(fromUser.id).emit("audio", { from, to });
+    }
+  });
+
+  socket.on("start-share-screen", ({ from, to }) => {
+    const fromUser = users.find((user) => user.username === from);
+    if (fromUser) {
+      io.to(fromUser.id).emit("start-share-screen", { from, to });
     }
   });
 

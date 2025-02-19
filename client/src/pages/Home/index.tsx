@@ -7,6 +7,7 @@ import { usePeer } from "../../provider/Peer";
 import { AiFillAudio, AiOutlineAudioMuted } from "react-icons/ai";
 import { FaCamera } from "react-icons/fa";
 import { RiCameraOffFill } from "react-icons/ri";
+import { MdScreenShare } from "react-icons/md";
 
 interface IProps {
   id: string,
@@ -20,7 +21,7 @@ function HomePage() {
   const [name, setName] = useState<string>('');
   const [users, setUsers] = useState<IProps[]>([]);
   const { socket } = useSocket()
-  const { localStream, setLocalStream, peer, remoteStream, callEnded, caller } = usePeer()
+  const { localStream, setLocalStream, peer, remoteStream, callEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen } = usePeer()
   const ref = useRef<HTMLInputElement>(null);
   const handleSubmit = () => {
     if (ref.current) {
@@ -51,6 +52,16 @@ function HomePage() {
     socket.emit('call-ended', { from: caller.from, to: caller.to })
   }, [socket, caller])
 
+  const handleScreenShare = useCallback(async () => {
+    const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+    setLocalScreen(screen)
+    screen.getTracks().forEach(track => peer.addTrack(track, screen))
+    peer.ontrack = (e) => {
+      setRemoteScreen(e.streams[0])
+    }
+    socket.emit('start-share-screen', ({ from: caller.from, to: caller.to }))
+  }, [peer, socket, caller, setLocalScreen, setRemoteScreen])
+
   const cam = useCallback(() => {
     setIsCamera(!isCamera)
     socket.emit('camera', { from: caller.from, to: caller.to })
@@ -64,7 +75,7 @@ function HomePage() {
   useEffect(() => {
     const startMyVideo = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         setLocalStream(stream)
       } catch (error) {
         console.log(error)
@@ -101,7 +112,7 @@ function HomePage() {
             {
               localStream !== null &&
               <div className="relative">
-                <ReactPlayer url={localStream as MediaStream} playing />
+                <ReactPlayer url={localStream} playing />
                 <span className="absolute left-22 top-2 bg-white px-2 py-1 font-bold text-sm rounded-lg">{caller.from || name || "You"}</span>
               </div>
             }
@@ -113,10 +124,29 @@ function HomePage() {
               </div>
             }
           </div>
+          <div>
+            {
+              localScreen !== null &&
+              <div className="relative">
+                <ReactPlayer url={localScreen} playing />
+                <span className="absolute left-22 top-2 bg-white px-2 py-1 font-bold text-sm rounded-lg">{caller.from || ''}</span>
+              </div>
+            }
+            {
+              remoteScreen !== null &&
+              <div className="relative">
+                <ReactPlayer url={remoteScreen} playing />
+                <span className="absolute left-22 top-2 bg-white px-2 py-1 font-bold text-sm rounded-lg">{caller.to || ''}</span>
+              </div>
+            }
+          </div>
           <div className="flex gap-2 justify-center items-center">
             {
               callEnded &&
               <div className="flex gap-2">
+                <button onClick={handleScreenShare} className="bg-red-500 text-white p-2 rounded-full font-bold cursor-pointer">
+                  <MdScreenShare size={30} />
+                </button>
                 <button onClick={cam} className="bg-red-500 text-white p-2 rounded-full font-bold cursor-pointer">
                   {isCamera ? <FaCamera size={30} /> : <RiCameraOffFill size={30} />}
                 </button>
