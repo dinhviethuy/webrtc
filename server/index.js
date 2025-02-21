@@ -82,6 +82,15 @@ io.on("connection", (socket) => {
     // console.log({ candidate });
     socket.broadcast.emit("icecandidate", candidate);
   });
+
+  socket.on("offer-chat", ({ offer }) => {
+    socket.broadcast.emit("offer-chat", offer);
+  });
+
+  socket.on("answer-chat", ({ answer }) => {
+    socket.broadcast.emit("answer-chat", answer);
+  });
+
   socket.on("disconnect", () => {
     console.log("Disconnected id: ", socket.id);
     const user = users.find((user) => user.id === socket.id);
