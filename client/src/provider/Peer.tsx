@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react"
+import { createContext, Dispatch, useCallback, useContext, useEffect, useState } from "react"
 import { useSocket } from "./Socket";
 
 interface PeerContextType {
@@ -13,6 +13,17 @@ interface PeerContextType {
   callEnded: boolean;
   setCallEnded: (value: boolean) => void;
   caller: ICaller;
+  dataChannel: null | RTCDataChannel
+  setChat: Dispatch<React.SetStateAction<{
+    sender: string;
+    text: string;
+  }[]>>,
+  chat: {
+    sender: string;
+    text: string;
+  }[],
+  setDataChanel: Dispatch<React.SetStateAction<RTCDataChannel | null>>,
+  setCaller: Dispatch<React.SetStateAction<ICaller>>
 }
 
 interface ICaller {
@@ -51,7 +62,12 @@ const PeerContext = createContext<PeerContextType>({
   caller: {
     from: '',
     to: ''
-  }
+  },
+  dataChannel: null,
+  setChat: () => { },
+  chat: [],
+  setDataChanel: () => { },
+  setCaller: () => { }
 })
 
 export const usePeer = () => {
@@ -70,23 +86,18 @@ const createPeer = () => {
 
 export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   const { socket } = useSocket()
-  // const peer = useMemo(() => new RTCPeerConnection({
-  //   iceServers: [
-  //     {
-  //       urls: 'stun:stun.l.google.com:19302',
-  //     }
-  //   ]
-  // }), [])
   const [peer, setPeer] = useState<RTCPeerConnection>(createPeer)
   const [localStream, setLocalStream] = useState<null | MediaStream>(null)
   const [localScreen, setLocalScreen] = useState<null | MediaStream>(null)
   const [remoteStream, setRemoteStream] = useState<null | MediaStream>(null)
   const [remoteScreen, setRemoteScreen] = useState<null | MediaStream>(null)
   const [callEnded, setCallEnded] = useState<boolean>(false)
+  const [chat, setChat] = useState<{ sender: string, text: string }[]>([])
   const [caller, setCaller] = useState<ICaller>({
     from: '',
     to: ''
   })
+  const [dataChannel, setDataChanel] = useState<RTCDataChannel | null>(null)
   const handleOffer = useCallback(async ({ from, to, offer }: IProps) => {
     await peer.setRemoteDescription(offer)
     const answer = await peer.createAnswer()
@@ -98,9 +109,9 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     console.log({ data })
     const { answer, from, to } = data
     await peer.setRemoteDescription(answer)
+    socket.emit('end-call', { from, to })
     setCaller({ to, from })
     setCallEnded(true)
-    socket.emit('end-call', { from, to })
   }, [peer, socket])
 
   const createIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
@@ -125,9 +136,11 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     setCallEnded(false)
     setCaller({ from: '', to: '' })
     setRemoteStream(null)
+    setChat([])
     peer.close()
+    setDataChanel(null)
     setPeer(createPeer)
-  }, [setCallEnded, setCaller, setRemoteStream, peer])
+  }, [setCallEnded, setCaller, setRemoteStream, peer, setChat, setDataChanel])
 
   const handleCamera = useCallback(() => {
     localStream?.getVideoTracks().forEach(track => {
@@ -154,16 +167,36 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
         peer.addTrack(track, localStream)
       })
     }
+  }, [localStream, peer])
+
+  useEffect(() => {
     peer.ontrack = (e) => {
       console.log({ e: e.streams })
       setRemoteStream(e.streams[0])
     }
+
     peer.onicecandidate = (e) => {
       if (e.candidate) {
         socket.emit('icecandidate', e.candidate)
       }
     }
-  }, [localStream, peer, socket])
+  }, [peer, socket])
+
+  useEffect(() => {
+    peer.ondatachannel = (e) => {
+      console.log({ e })
+      const channel = e.channel;
+      setDataChanel(channel);
+      channel.onmessage = (e) => {
+        setChat((prev) => [...prev, { sender: caller.to, text: e.data }]);
+      };
+      channel.onopen = () => console.log("DataChannel đã mở");
+      channel.onclose = () => {
+        console.log("DataChannel đã đóng");
+        setDataChanel(null);
+      };
+    };
+  }, [peer, setDataChanel, setChat, caller])
 
   useEffect(() => {
     socket.on('offer', handleOffer)
@@ -185,7 +218,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <>
-      <PeerContext.Provider value={{ peer, localStream, remoteStream, setLocalStream, callEnded, setCallEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen }}>
+      <PeerContext.Provider value={{ peer, localStream, remoteStream, setLocalStream, callEnded, setCallEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller }}>
         {children}
       </PeerContext.Provider>
     </>
