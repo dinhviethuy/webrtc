@@ -23,7 +23,9 @@ interface PeerContextType {
     text: string;
   }[],
   setDataChanel: Dispatch<React.SetStateAction<RTCDataChannel | null>>,
-  setCaller: Dispatch<React.SetStateAction<ICaller>>
+  setCaller: Dispatch<React.SetStateAction<ICaller>>,
+  showNotification: boolean;
+  setShowNotification: Dispatch<React.SetStateAction<boolean>>;
 }
 
 interface ICaller {
@@ -67,7 +69,9 @@ const PeerContext = createContext<PeerContextType>({
   setChat: () => { },
   chat: [],
   setDataChanel: () => { },
-  setCaller: () => { }
+  setCaller: () => { },
+  showNotification: false,
+  setShowNotification: () => { },
 })
 
 export const usePeer = () => {
@@ -97,8 +101,10 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     from: '',
     to: ''
   })
+  const [showNotification, setShowNotification] = useState<boolean>(false)
   const [dataChannel, setDataChanel] = useState<RTCDataChannel | null>(null)
   const handleOffer = useCallback(async ({ from, to, offer }: IProps) => {
+    setShowNotification(false)
     await peer.setRemoteDescription(offer)
     const answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
@@ -218,7 +224,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <>
-      <PeerContext.Provider value={{ peer, localStream, remoteStream, setLocalStream, callEnded, setCallEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller }}>
+      <PeerContext.Provider value={{ peer, localStream, remoteStream, setLocalStream, callEnded, setCallEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller, showNotification, setShowNotification }}>
         {children}
       </PeerContext.Provider>
     </>

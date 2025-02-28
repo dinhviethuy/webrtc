@@ -11,6 +11,8 @@ const io = new Server(server, {
   },
 });
 
+const busy = [];
+
 const port = 8080;
 
 const users = [];
@@ -30,6 +32,39 @@ io.on("connection", (socket) => {
       io.to(toUser.id).emit("offer", { from, to, offer });
     }
   });
+
+  socket.on("call", ({ from, to }) => {
+    console.log("Call from: ", from, " to: ", to);
+    const toUser = users.find((user) => user.username === to);
+    if (toUser) {
+      io.to(toUser.id).emit("call", { from, to });
+    }
+  });
+
+  socket.on("cancel-call", ({ from, to }) => {
+    console.log("Cancel call from: ", from, " to: ", to);
+    const toUser = users.find((user) => user.username === to);
+    if (toUser) {
+      io.to(toUser.id).emit("cancel-call", { from, to });
+    }
+  });
+
+  socket.on("reject-call", ({ from, to }) => {
+    console.log("Reject call from: ", from, " to: ", to);
+    const fromUser = users.find((user) => user.username === from);
+    if (fromUser) {
+      io.to(fromUser.id).emit("reject-call", { from, to });
+    }
+  });
+
+  socket.on("accept-call", ({ from, to }) => {
+    console.log("Accept call from: ", from, " to: ", to);
+    const fromUser = users.find((user) => user.username === from);
+    if (fromUser) {
+      io.to(fromUser.id).emit("accept-call", { from, to });
+    }
+  });
+
   socket.on("answer", ({ from, to, answer }) => {
     console.log("Answer from: ", from, " to: ", to);
     const fromUser = users.find((user) => user.username === from);

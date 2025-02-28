@@ -4,7 +4,7 @@ import { useSocket } from "../../provider/Socket";
 import phone from '../../assets/phone.png'
 import endCall from '../../assets/phone-disconnect.png'
 import { usePeer } from "../../provider/Peer";
-import { AiFillAudio, AiOutlineAudioMuted } from "react-icons/ai";
+import { AiFillAudio, AiOutlineAudioMuted, AiOutlineUser } from "react-icons/ai";
 import { FaCamera } from "react-icons/fa";
 import { RiCameraOffFill } from "react-icons/ri";
 import { MdScreenShare } from "react-icons/md";
@@ -14,6 +14,7 @@ interface IProps {
   username: string,
 }
 
+
 function HomePage() {
   const [hidden, setHidden] = useState<boolean>(false);
   const [isCamera, setIsCamera] = useState<boolean>(true);
@@ -21,10 +22,11 @@ function HomePage() {
   const [name, setName] = useState<string>('');
   const [users, setUsers] = useState<IProps[]>([]);
   const { socket } = useSocket()
-  const { localStream, setLocalStream, peer, remoteStream, callEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller } = usePeer()
+  const { localStream, setLocalStream, peer, remoteStream, callEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller, setShowNotification, showNotification } = usePeer()
   const ref = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string>("")
-  const [showChat, setShowChat] = useState<boolean>(false)
+  const [showChat, setShowChat] = useState<boolean>(true)
+  const [notification, setNotification] = useState<boolean>(false)
   const handleSubmit = () => {
     if (ref.current) {
       const name = ref.current.value;
@@ -35,7 +37,7 @@ function HomePage() {
   }
   const joined = useCallback((data: IProps[]) => {
     setUsers(data)
-  }, [])
+  }, [setUsers])
   const setupDataChannel = useCallback((channel: RTCDataChannel, user: string) => {
     channel.onopen = () => console.log("DataChannel đã mở!");
     channel.onmessage = (event) => {
@@ -43,21 +45,28 @@ function HomePage() {
     }
     channel.onclose = () => console.log("DataChannel đã đóng!");
   }, [setChat])
-  const handleCall = useCallback(async (user: string) => {
+
+  const handleSetupCall = useCallback(async (user: string) => {
+    setShowNotification(true)
     setCaller({ from: name, to: user })
+    socket.emit('call', { from: name, to: user })
+  }, [socket, name, setShowNotification, setCaller])
+
+  const handleCall = useCallback(async ({ from, to }: { from: string, to: string }) => {
+    setCaller({ from, to })
     const dataChannel = peer.createDataChannel('chat')
     setDataChanel(dataChannel)
-    setupDataChannel(dataChannel, user)
+    setupDataChannel(dataChannel, to)
     const offer = await peer.createOffer()
     await peer.setLocalDescription(offer)
-    socket.emit('offer', { from: name, to: user, offer })
-  }, [peer, socket, name, setCaller, setDataChanel, setupDataChannel])
+    socket.emit('offer', { from, to, offer })
+  }, [peer, socket, setCaller, setDataChanel, setupDataChannel])
   useEffect(() => {
     socket.on('joined', joined)
     return () => {
       socket.off('joined', joined)
     }
-  })
+  }, [socket, joined])
 
   const handleEndCall = useCallback(() => {
     socket.emit('call-ended', { from: caller.from, to: caller.to })
@@ -90,12 +99,46 @@ function HomePage() {
       console.log({ caller })
       setChat((prev: { sender: string; text: string; }[]) => [...prev, { sender: caller.from, text: message }])
     }
-  }, [dataChannel, message, setChat, caller])
+  }, [dataChannel, message, setChat, caller, setMessage])
+
+  const handleNotification = useCallback(({ from, to }: { from: string, to: string }) => {
+    console.log({ from, to })
+    setNotification(true)
+    setCaller({ from: to, to: from })
+  }, [setNotification, setCaller])
+
+  const handleAcceptCall = useCallback(async () => {
+    setNotification(false)
+    socket.emit('accept-call', { from: caller.from, to: caller.to })
+  }, [socket, caller])
+
+  const handleRejectCall = useCallback(async () => {
+    setNotification(false)
+    socket.emit('reject-call', { from: caller.to, to: caller.from })
+  }, [socket, caller])
+
+  const handleRejectCallFrom = useCallback(() => {
+    console.log('reject-call')
+    setShowNotification(false)
+  }, [setShowNotification])
+
+  const handleCancelCallSuccess = useCallback(() => {
+    console.log('cancel-call')
+    setCaller({ from: '', to: '' })
+    setNotification(false)
+  }, [setCaller])
+
+  const handleCancelCall = useCallback(() => {
+    setShowNotification(false)
+    console.log({ caller })
+    socket.emit('cancel-call', { from: caller.from, to: caller.to })
+    setCaller({ from: '', to: '' })
+  }, [socket, caller, setShowNotification, setCaller])
 
   useEffect(() => {
     const startMyVideo = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         setLocalStream(stream)
       } catch (error) {
         console.log(error)
@@ -109,6 +152,30 @@ function HomePage() {
       lastMessageRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chat]);
+
+  useEffect(() => {
+    socket.on('call', handleNotification)
+    return () => {
+      socket.off('call', handleNotification)
+    }
+  }, [socket, handleNotification])
+
+  useEffect(() => {
+    socket.on('reject-call', handleRejectCallFrom)
+    return () => {
+      socket.off('reject-call', handleRejectCallFrom)
+    }
+  }, [socket, handleRejectCallFrom])
+
+  useEffect(() => {
+    socket.on('accept-call', handleCall)
+    socket.on('cancel-call', handleCancelCallSuccess)
+    return () => {
+      socket.off('accept-call', handleCall)
+      socket.off('cancel-call', handleCancelCallSuccess)
+    }
+  }, [socket, handleCall, handleCancelCallSuccess])
+
   return (
     <>
       <div className="w-screen dark:bg-gray-800 col-span-12 gap-4 h-screen flex">
@@ -123,7 +190,9 @@ function HomePage() {
                   <span>
                     {user.username === name ? `${name} (You)` : `${user.username} (Khách)`}
                   </span>
-                  {user.username !== name ? <img src={phone} onClick={() => handleCall(user.username)} alt="phone" className="cursor-pointer w-8 h-8 absolute right-2 bottom-2 bg-amber-50 rounded-full p-1" /> : ''}
+                  {user.username !== name ? <img src={phone} onClick={() => {
+                    handleSetupCall(user.username)
+                  }} alt="phone" className="cursor-pointer w-8 h-8 absolute right-2 bottom-2 bg-amber-50 rounded-full p-1" /> : ''}
                 </li>
               </div>
             ))}
@@ -225,6 +294,43 @@ function HomePage() {
           </div>
         }
       </div >
+      {showNotification &&
+        <div className="fixed top-0 left-0 w-full h-full bg-gray-700 opacity-95 flex justify-center items-center z-auto">
+          <div className="bg-white p-4 w-[500px] h-[320px] rounded-lg flex flex-col items-center justify-between">
+            <div className="flex flex-col items-center gap-4">
+              <div className="bg-gray-400 p-6 rounded-full">
+                <AiOutlineUser size={100} />
+              </div>
+              <span>Đang gọi cho <span className="font-bold text-xl">{caller.to}</span></span>
+            </div>
+            <div className="flex justify-evenly w-full">
+              <div className="bg-gray-200 p-2 rounded-full cursor-pointer hover:bg-gray-300" onClick={handleCancelCall}>
+                <img src={endCall} alt="" className="w-12 h-12 p-1" />
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+      {notification &&
+        <div className="fixed top-0 left-0 w-full h-full bg-gray-700 opacity-95 flex justify-center items-center z-auto">
+          <div className="bg-white p-4 w-[500px] h-[320px] rounded-lg flex flex-col items-center justify-between">
+            <div className="flex flex-col items-center gap-4">
+              <div className="bg-gray-400 p-6 rounded-full">
+                <AiOutlineUser size={100} />
+              </div>
+              <span>Cuộc gọi đến từ <span className="font-bold text-xl">{caller.to}</span></span>
+            </div>
+            <div className="flex justify-evenly w-full">
+              <div className="bg-gray-200 p-2 rounded-full cursor-pointer hover:bg-gray-300">
+                <img src={phone} alt="" className="w-12 h-12 p-1" onClick={handleAcceptCall} />
+              </div>
+              <div className="bg-gray-200 p-2 rounded-full cursor-pointer hover:bg-gray-300" onClick={handleRejectCall}>
+                <img src={endCall} alt="" className="w-12 h-12 p-1" />
+              </div>
+            </div>
+          </div>
+        </div>
+      }
     </>
   );
 }
