@@ -26,6 +26,7 @@ interface PeerContextType {
   setCaller: Dispatch<React.SetStateAction<ICaller>>,
   showNotification: boolean;
   setShowNotification: Dispatch<React.SetStateAction<boolean>>;
+  busy: string[];
 }
 
 interface ICaller {
@@ -72,6 +73,7 @@ const PeerContext = createContext<PeerContextType>({
   setCaller: () => { },
   showNotification: false,
   setShowNotification: () => { },
+  busy: []
 })
 
 export const usePeer = () => {
@@ -97,6 +99,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   const [remoteScreen, setRemoteScreen] = useState<null | MediaStream>(null)
   const [callEnded, setCallEnded] = useState<boolean>(false)
   const [chat, setChat] = useState<{ sender: string, text: string }[]>([])
+  const [busy, setBusy] = useState<string[]>([])
   const [caller, setCaller] = useState<ICaller>({
     from: '',
     to: ''
@@ -167,6 +170,11 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
     socket.emit('offer', { from: data.from, to: data.to, offer: peer.localDescription })
   }, [peer, socket])
 
+  const handleBusy = useCallback((data: string[]) => {
+    console.log({ data })
+    setBusy(data)
+  }, [])
+
   useEffect(() => {
     if (localStream && localStream.getTracks().length > 0) {
       localStream.getTracks().forEach(track => {
@@ -205,6 +213,13 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
   }, [peer, setDataChanel, setChat, caller])
 
   useEffect(() => {
+    socket.on('busy', handleBusy);
+    return () => {
+      socket.off('busy', handleBusy);
+    }
+  }, [handleBusy, socket])
+
+  useEffect(() => {
     socket.on('offer', handleOffer)
     socket.on('answer', createAnswer)
     socket.on('icecandidate', createIceCandidate)
@@ -224,7 +239,7 @@ export const PeerProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <>
-      <PeerContext.Provider value={{ peer, localStream, remoteStream, setLocalStream, callEnded, setCallEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller, showNotification, setShowNotification }}>
+      <PeerContext.Provider value={{ peer, localStream, remoteStream, setLocalStream, callEnded, setCallEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller, showNotification, setShowNotification, busy }}>
         {children}
       </PeerContext.Provider>
     </>

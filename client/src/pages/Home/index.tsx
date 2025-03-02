@@ -22,7 +22,7 @@ function HomePage() {
   const [name, setName] = useState<string>('');
   const [users, setUsers] = useState<IProps[]>([]);
   const { socket } = useSocket()
-  const { localStream, setLocalStream, peer, remoteStream, callEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller, setShowNotification, showNotification } = usePeer()
+  const { localStream, setLocalStream, peer, remoteStream, callEnded, caller, localScreen, remoteScreen, setLocalScreen, setRemoteScreen, dataChannel, setChat, chat, setDataChanel, setCaller, setShowNotification, showNotification, busy } = usePeer()
   const ref = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string>("")
   const [showChat, setShowChat] = useState<boolean>(true)
@@ -138,7 +138,7 @@ function HomePage() {
   useEffect(() => {
     const startMyVideo = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         setLocalStream(stream)
       } catch (error) {
         console.log(error)
@@ -191,7 +191,15 @@ function HomePage() {
                     {user.username === name ? `${name} (You)` : `${user.username} (Khách)`}
                   </span>
                   {user.username !== name ? <img src={phone} onClick={() => {
-                    handleSetupCall(user.username)
+                    if (!busy.includes(user.username)) {
+                      if (endCall) {
+                        alert("Bạn đang trong cuộc gọi")
+                      } else {
+                        handleSetupCall(user.username)
+                      }
+                    } else {
+                      alert('Người dùng đang bận')
+                    }
                   }} alt="phone" className="cursor-pointer w-8 h-8 absolute right-2 bottom-2 bg-amber-50 rounded-full p-1" /> : ''}
                 </li>
               </div>

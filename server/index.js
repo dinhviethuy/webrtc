@@ -23,6 +23,7 @@ io.on("connection", (socket) => {
     console.log("User joined: ", username);
     users.push({ id: socket.id, username });
     io.emit("joined", users);
+    io.to(socket.id).emit("busy", busy);
   });
   socket.on("offer", ({ from, to, offer }) => {
     console.log("Offer from: ", from, " to: ", to);
@@ -35,26 +36,47 @@ io.on("connection", (socket) => {
 
   socket.on("call", ({ from, to }) => {
     console.log("Call from: ", from, " to: ", to);
+    busy.push(from);
+    busy.push(to);
     const toUser = users.find((user) => user.username === to);
     if (toUser) {
       io.to(toUser.id).emit("call", { from, to });
     }
+    io.emit("busy", busy);
   });
 
   socket.on("cancel-call", ({ from, to }) => {
     console.log("Cancel call from: ", from, " to: ", to);
+    const indexFromUser = busy.indexOf(from);
+    const indexToUser = busy.indexOf(to);
+    if (indexFromUser !== -1) {
+      busy.splice(indexFromUser, 1);
+    }
+    if (indexToUser !== -1) {
+      busy.splice(indexToUser, 1);
+    }
     const toUser = users.find((user) => user.username === to);
     if (toUser) {
       io.to(toUser.id).emit("cancel-call", { from, to });
     }
+    io.emit("busy", busy);
   });
 
   socket.on("reject-call", ({ from, to }) => {
     console.log("Reject call from: ", from, " to: ", to);
+    const indexFromUser = busy.indexOf(from);
+    const indexToUser = busy.indexOf(to);
+    if (indexFromUser !== -1) {
+      busy.splice(indexFromUser, 1);
+    }
+    if (indexToUser !== -1) {
+      busy.splice(indexToUser, 1);
+    }
     const fromUser = users.find((user) => user.username === from);
     if (fromUser) {
       io.to(fromUser.id).emit("reject-call", { from, to });
     }
+    io.emit("busy", busy);
   });
 
   socket.on("accept-call", ({ from, to }) => {
@@ -80,6 +102,14 @@ io.on("connection", (socket) => {
     }
   });
   socket.on("call-ended", ({ from, to }) => {
+    const indexFromUser = busy.indexOf(from);
+    const indexToUser = busy.indexOf(to);
+    if (indexFromUser !== -1) {
+      busy.splice(indexFromUser, 1);
+    }
+    if (indexToUser !== -1) {
+      busy.splice(indexToUser, 1);
+    }
     const fromUser = users.find((user) => user.username === from);
     const toUser = users.find((user) => user.username === to);
     console.log("Call ended: ", from, to);
@@ -89,6 +119,7 @@ io.on("connection", (socket) => {
     if (fromUser) {
       io.to(fromUser.id).emit("call-ended", { from, to });
     }
+    io.emit("busy", busy);
   });
 
   socket.on("camera", ({ from, to }) => {
