@@ -157,12 +157,33 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("answer-chat", answer);
   });
 
+  socket.on("change-whiteboard", ({ to }) => {
+    console.log("Change whiteboard to: ", to);
+    const index = users.findIndex((user) => user.username === to);
+    if (index !== -1) {
+      io.to(users[index].id).emit("change-whiteboard", { to });
+    }
+  });
+
+  socket.on("start-whiteboard", ({ from }) => {
+    console.log("Change whiteboard from: ", from);
+    const index = users.findIndex((user) => user.username === from);
+    if (index !== -1) {
+      io.to(users[index].id).emit("start-whiteboard", { from });
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("Disconnected id: ", socket.id);
     const user = users.find((user) => user.id === socket.id);
     if (user) {
       users.splice(users.indexOf(user), 1);
       io.emit("joined", users);
+      const index = busy.indexOf(user.username);
+      if (index !== -1) {
+        busy.splice(index, 1);
+      }
+      io.emit("busy", busy);
     }
   });
 });

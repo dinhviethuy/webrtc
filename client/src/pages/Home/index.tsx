@@ -9,6 +9,8 @@ import { FaCamera } from "react-icons/fa";
 import { RiCameraOffFill } from "react-icons/ri";
 import { MdScreenShare } from "react-icons/md";
 import { BsChatSquareText } from "react-icons/bs";
+import Whiteboard from "../../components/WhiteBoard";
+import { TfiBlackboard } from "react-icons/tfi";
 interface IProps {
   id: string,
   username: string,
@@ -38,13 +40,10 @@ function HomePage() {
   const joined = useCallback((data: IProps[]) => {
     setUsers(data)
   }, [setUsers])
-  const setupDataChannel = useCallback((channel: RTCDataChannel, user: string) => {
+  const setupDataChannel = useCallback((channel: RTCDataChannel) => {
     channel.onopen = () => console.log("DataChannel đã mở!");
-    channel.onmessage = (event) => {
-      setChat((prev: { sender: string; text: string; }[]) => [...prev, { sender: user, text: event.data }])
-    }
     channel.onclose = () => console.log("DataChannel đã đóng!");
-  }, [setChat])
+  }, [])
 
   const handleSetupCall = useCallback(async (user: string) => {
     setShowNotification(true)
@@ -56,7 +55,7 @@ function HomePage() {
     setCaller({ from, to })
     const dataChannel = peer.createDataChannel('chat')
     setDataChanel(dataChannel)
-    setupDataChannel(dataChannel, to)
+    setupDataChannel(dataChannel)
     const offer = await peer.createOffer()
     await peer.setLocalDescription(offer)
     socket.emit('offer', { from, to, offer })
@@ -94,12 +93,15 @@ function HomePage() {
 
   const sendMessage = useCallback(async () => {
     if (dataChannel && message) {
-      dataChannel.send(message)
+      console.log(message)
+      dataChannel.send(
+        JSON.stringify({ type: "message", message, sender: name })
+      );
       setMessage('')
       console.log({ caller })
       setChat((prev: { sender: string; text: string; }[]) => [...prev, { sender: caller.from, text: message }])
     }
-  }, [dataChannel, message, setChat, caller, setMessage])
+  }, [dataChannel, message, setChat, caller, setMessage, name])
 
   const handleNotification = useCallback(({ from, to }: { from: string, to: string }) => {
     console.log({ from, to })
@@ -192,7 +194,7 @@ function HomePage() {
                   </span>
                   {user.username !== name ? <img src={phone} onClick={() => {
                     if (!busy.includes(user.username)) {
-                      if (endCall) {
+                      if (callEnded) {
                         alert("Bạn đang trong cuộc gọi")
                       } else {
                         handleSetupCall(user.username)
@@ -207,6 +209,7 @@ function HomePage() {
           </ul>
         </div>
         <div className="flex-1 h-screen flex justify-center items-center flex-col gap-4">
+          {endCall && dataChannel && <Whiteboard dataChannel={dataChannel} socket={socket} setChat={setChat} />}
           <div className={`flex justify-center gap-4 items-center ` + (hidden ? 'hidden' : '')}>
             <input ref={ref} type="text" id="name" className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-[350px] p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your name" required />
             <button onClick={handleSubmit} type="button" className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800 cursor-pointer">Join Server</button>
@@ -260,6 +263,12 @@ function HomePage() {
                 </button>
                 <button onClick={audio} className="bg-red-500 text-white p-2 rounded-full font-bold cursor-pointer">
                   {isAudio ? <AiFillAudio size={30} /> : <AiOutlineAudioMuted size={30} />}
+                </button>
+                <button className="bg-red-500 text-white p-2 rounded-full font-bold cursor-pointer" onClick={() => {
+                  socket.emit('start-whiteboard', { from: caller.from })
+                  socket.emit('change-whiteboard', { to: caller.to })
+                }}>
+                  <TfiBlackboard size={30} />
                 </button>
               </div>
             }
